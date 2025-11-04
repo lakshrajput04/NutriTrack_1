@@ -4,6 +4,8 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { User, Target, TrendingUp, Calendar, LogOut, Activity as ActivityIcon, Weight, Ruler } from "lucide-react";
 import { getUser, logout } from "@/services/auth";
+import { getWeeklyMeals, calculateWeeklyStats, calculateDailyTotals } from "@/services/mealService";
+import { toast } from "sonner";
 import {
   LineChart,
   Line,
@@ -20,6 +22,10 @@ import {
 const Dashboard = () => {
   const navigate = useNavigate();
   const [userProfile, setUserProfile] = useState<any>(null);
+  const [weeklyData, setWeeklyData] = useState<any[]>([]);
+  const [macroData, setMacroData] = useState<any[]>([]);
+  const [weeklyStats, setWeeklyStats] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const user = getUser();
@@ -27,31 +33,87 @@ const Dashboard = () => {
       navigate("/login");
     } else {
       setUserProfile(user);
+      loadDashboardData(user._id);
     }
   }, [navigate]);
+
+  const loadDashboardData = async (userId: string) => {
+    try {
+      setLoading(true);
+      const meals = await getWeeklyMeals(userId);
+      
+      // Calculate weekly stats
+      const stats = calculateWeeklyStats(meals);
+      setWeeklyStats(stats);
+      
+      // Generate weekly calorie data
+      const last7Days = [];
+      const dayNames = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+      const today = new Date();
+      
+      for (let i = 6; i >= 0; i--) {
+        const date = new Date(today);
+        date.setDate(date.getDate() - i);
+        date.setHours(0, 0, 0, 0);
+        
+        const nextDay = new Date(date);
+        nextDay.setDate(nextDay.getDate() + 1);
+        
+        const dayMeals = meals.filter(meal => {
+          const mealDate = new Date(meal.date);
+          return mealDate >= date && mealDate < nextDay;
+        });
+        
+        const dailyCalories = dayMeals.reduce((sum, meal) => sum + meal.totalCalories, 0);
+        
+        last7Days.push({
+          day: dayNames[date.getDay()],
+          calories: dailyCalories,
+          date: date.toLocaleDateString()
+        });
+      }
+      
+      setWeeklyData(last7Days);
+      
+      // Calculate total macros for the week
+      const totals = calculateDailyTotals(meals);
+      setMacroData([
+        { name: "Protein", value: Math.round(totals.protein), fill: "hsl(142 76% 36%)" },
+        { name: "Carbs", value: Math.round(totals.carbs), fill: "hsl(210 100% 50%)" },
+        { name: "Fats", value: Math.round(totals.fats), fill: "hsl(38 92% 50%)" },
+      ]);
+      
+    } catch (error) {
+      console.error('Failed to load dashboard data:', error);
+      toast.error('Failed to load dashboard data');
+      
+      // Set empty data on error
+      setWeeklyData([
+        { day: "Mon", calories: 0 },
+        { day: "Tue", calories: 0 },
+        { day: "Wed", calories: 0 },
+        { day: "Thu", calories: 0 },
+        { day: "Fri", calories: 0 },
+        { day: "Sat", calories: 0 },
+        { day: "Sun", calories: 0 },
+      ]);
+      setMacroData([
+        { name: "Protein", value: 0, fill: "hsl(142 76% 36%)" },
+        { name: "Carbs", value: 0, fill: "hsl(210 100% 50%)" },
+        { name: "Fats", value: 0, fill: "hsl(38 92% 50%)" },
+      ]);
+      setWeeklyStats({ totalMeals: 0, avgDailyCalories: 0, daysLogged: 0 });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleLogout = () => {
     logout();
     navigate("/login");
   };
 
-  const weeklyData = [
-    { day: "Mon", calories: 1850 },
-    { day: "Tue", calories: 2100 },
-    { day: "Wed", calories: 1920 },
-    { day: "Thu", calories: 2050 },
-    { day: "Fri", calories: 1780 },
-    { day: "Sat", calories: 2200 },
-    { day: "Sun", calories: 1950 },
-  ];
-
-  const macroData = [
-    { name: "Protein", value: 120, fill: "hsl(142 76% 36%)" },
-    { name: "Carbs", value: 250, fill: "hsl(210 100% 50%)" },
-    { name: "Fats", value: 70, fill: "hsl(38 92% 50%)" },
-  ];
-
-  if (!userProfile) {
+  if (!userProfile || loading) {
     return null;
   }
 
@@ -247,17 +309,23 @@ const Dashboard = () => {
             <div className="grid gap-6 md:grid-cols-3">
               <div className="rounded-lg border p-4">
                 <p className="mb-1 text-sm text-muted-foreground">Average Daily Calories</p>
-                <p className="text-2xl font-bold text-primary">1,978</p>
+                <p className="text-2xl font-bold text-primary">
+                  {weeklyStats ? weeklyStats.avgDailyCalories.toLocaleString() : '0'}
+                </p>
                 <p className="text-xs text-muted-foreground">This week</p>
               </div>
               <div className="rounded-lg border p-4">
-                <p className="mb-1 text-sm text-muted-foreground">Days on Track</p>
-                <p className="text-2xl font-bold text-success">6/7</p>
+                <p className="mb-1 text-sm text-muted-foreground">Days Logged</p>
+                <p className="text-2xl font-bold text-success">
+                  {weeklyStats ? `${weeklyStats.daysLogged}/7` : '0/7'}
+                </p>
                 <p className="text-xs text-muted-foreground">This week</p>
               </div>
               <div className="rounded-lg border p-4">
                 <p className="mb-1 text-sm text-muted-foreground">Total Meals Logged</p>
-                <p className="text-2xl font-bold text-secondary">21</p>
+                <p className="text-2xl font-bold text-secondary">
+                  {weeklyStats ? weeklyStats.totalMeals : '0'}
+                </p>
                 <p className="text-xs text-muted-foreground">This week</p>
               </div>
             </div>

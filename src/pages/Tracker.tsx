@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -14,6 +15,8 @@ import { Progress } from "@/components/ui/progress";
 import { Plus, Coffee, UtensilsCrossed, Moon, Apple, Search, ChefHat } from "lucide-react";
 import { toast } from "sonner";
 import { loadRecipes, searchRecipes, Recipe } from "@/services/recipeService";
+import { saveMealLog, getTodayMeals } from "@/services/mealService";
+import { getUser } from "@/services/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Meal {
@@ -27,23 +30,62 @@ interface Meal {
 }
 
 const Tracker = () => {
+  const navigate = useNavigate();
   const [meals, setMeals] = useState<Meal[]>([]);
   const [mealType, setMealType] = useState("");
   const [foodName, setFoodName] = useState("");
   const [calories, setCalories] = useState("");
+  const [userProfile, setUserProfile] = useState<any>(null);
   
   // Recipe browser state
   const [recipes, setRecipes] = useState<Recipe[]>([]);
   const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
   const [recipeSearch, setRecipeSearch] = useState("");
   const [loadingRecipes, setLoadingRecipes] = useState(true);
+  const [loadingMeals, setLoadingMeals] = useState(true);
 
-  const calorieGoal = 2000;
+  const calorieGoal = userProfile?.dailyCalorieGoal || 2000;
   const totalCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
   const totalProtein = meals.reduce((sum, meal) => sum + meal.protein, 0);
   const totalCarbs = meals.reduce((sum, meal) => sum + meal.carbs, 0);
   const totalFats = meals.reduce((sum, meal) => sum + meal.fats, 0);
   const progressPercentage = Math.min((totalCalories / calorieGoal) * 100, 100);
+
+  // Check authentication and load user
+  useEffect(() => {
+    const user = getUser();
+    if (!user) {
+      navigate("/login");
+    } else {
+      setUserProfile(user);
+      loadTodayMeals(user._id);
+    }
+  }, [navigate]);
+
+  // Load today's meals
+  const loadTodayMeals = async (userId: string) => {
+    try {
+      setLoadingMeals(true);
+      const todayMeals = await getTodayMeals(userId);
+      
+      // Convert backend meal logs to Meal format
+      const convertedMeals = todayMeals.map(mealLog => ({
+        id: Date.now() + Math.random(),
+        type: mealLog.mealType,
+        food: mealLog.foods.map(f => f.name).join(', '),
+        calories: mealLog.totalCalories,
+        protein: mealLog.foods.reduce((sum, f) => sum + f.protein, 0),
+        carbs: mealLog.foods.reduce((sum, f) => sum + f.carbs, 0),
+        fats: mealLog.foods.reduce((sum, f) => sum + f.fat, 0),
+      }));
+      
+      setMeals(convertedMeals);
+    } catch (error) {
+      console.error('Failed to load meals:', error);
+    } finally {
+      setLoadingMeals(false);
+    }
+  };
 
   // Load recipes on mount
   useEffect(() => {
@@ -77,47 +119,112 @@ const Tracker = () => {
     { name: "Salmon with Vegetables", calories: 480, icon: UtensilsCrossed },
   ];
 
-  const handleAddMeal = () => {
+  const handleAddMeal = async () => {
     if (!mealType || !foodName || !calories) {
       toast.error("Please fill in all fields");
       return;
     }
 
-    const newMeal: Meal = {
-      id: Date.now(),
-      type: mealType,
-      food: foodName,
-      calories: parseInt(calories),
-      protein: 0,
-      carbs: 0,
-      fats: 0,
-    };
+    if (!userProfile) {
+      toast.error("Please login to log meals");
+      navigate("/login");
+      return;
+    }
 
-    setMeals([...meals, newMeal]);
-    setMealType("");
-    setFoodName("");
-    setCalories("");
-    toast.success("Meal logged successfully!");
+    try {
+      const calorieValue = parseInt(calories);
+      
+      // Save to backend
+      await saveMealLog({
+        userId: userProfile._id,
+        foods: [{
+          name: foodName,
+          calories: calorieValue,
+          protein: 0,
+          carbs: 0,
+          fat: 0,
+          quantity: "1 serving"
+        }],
+        totalCalories: calorieValue,
+        mealType: mealType as 'breakfast' | 'lunch' | 'dinner' | 'snack',
+        date: new Date().toISOString()
+      });
+
+      // Update local state
+      const newMeal: Meal = {
+        id: Date.now(),
+        type: mealType,
+        food: foodName,
+        calories: calorieValue,
+        protein: 0,
+        carbs: 0,
+        fats: 0,
+      };
+
+      setMeals([...meals, newMeal]);
+      setMealType("");
+      setFoodName("");
+      setCalories("");
+      toast.success("Meal logged successfully!");
+    } catch (error) {
+      console.error('Failed to save meal:', error);
+      toast.error("Failed to save meal. Please try again.");
+    }
   };
 
-  const handleAddRecipe = (recipe: Recipe) => {
+  const handleAddRecipe = async (recipe: Recipe) => {
     if (!mealType) {
       toast.error("Please select a meal type first");
       return;
     }
 
-    const newMeal: Meal = {
-      id: Date.now(),
-      type: mealType,
-      food: recipe.name,
-      calories: Math.round(recipe.calories),
-      protein: Math.round(recipe.protein),
-      carbs: Math.round(recipe.carbs),
-      fats: Math.round(recipe.fats),
-    };
+    if (!userProfile) {
+      toast.error("Please login to log meals");
+      navigate("/login");
+      return;
+    }
 
-    setMeals([...meals, newMeal]);
-    toast.success(`Added ${recipe.name} to ${mealType}!`);
+    try {
+      const calorieValue = Math.round(recipe.calories);
+      const proteinValue = Math.round(recipe.protein);
+      const carbsValue = Math.round(recipe.carbs);
+      const fatsValue = Math.round(recipe.fats);
+      
+      // Save to backend
+      await saveMealLog({
+        userId: userProfile._id,
+        foods: [{
+          name: recipe.name,
+          calories: calorieValue,
+          protein: proteinValue,
+          carbs: carbsValue,
+          fat: fatsValue,
+          fiber: Math.round(recipe.fibre || 0),
+          sugar: Math.round(recipe.freeSugar || 0),
+          quantity: "1 serving"
+        }],
+        totalCalories: calorieValue,
+        mealType: mealType as 'breakfast' | 'lunch' | 'dinner' | 'snack',
+        date: new Date().toISOString()
+      });
+
+      // Update local state
+      const newMeal: Meal = {
+        id: Date.now(),
+        type: mealType,
+        food: recipe.name,
+        calories: calorieValue,
+        protein: proteinValue,
+        carbs: carbsValue,
+        fats: fatsValue,
+      };
+
+      setMeals([...meals, newMeal]);
+      toast.success(`Added ${recipe.name} to ${mealType}!`);
+    } catch (error) {
+      console.error('Failed to save recipe:', error);
+      toast.error("Failed to save recipe. Please try again.");
+    }
   };
 
   const getMealIcon = (type: string) => {

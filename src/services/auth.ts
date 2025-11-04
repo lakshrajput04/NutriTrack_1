@@ -8,6 +8,9 @@ export interface UserDTO {
   activityLevel?: string;
   goals?: string[];
   dailyCalorieGoal?: number;
+  googleId?: string;
+  fitDataEnabled?: boolean;
+  googleAccessToken?: string;
 }
 
 export interface LoginResult {

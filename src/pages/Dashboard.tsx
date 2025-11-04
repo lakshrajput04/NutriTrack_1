@@ -2,9 +2,10 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { User, Target, TrendingUp, Calendar, LogOut, Activity as ActivityIcon, Weight, Ruler } from "lucide-react";
+import { User, Target, TrendingUp, Calendar, LogOut, Activity as ActivityIcon, Weight, Ruler, Footprints, Flame } from "lucide-react";
 import { getUser, logout } from "@/services/auth";
 import { getWeeklyMeals, calculateWeeklyStats, calculateDailyTotals } from "@/services/mealService";
+import { googleFitService, StepHistory } from "@/services/googleFitService";
 import { toast } from "sonner";
 import {
   LineChart,
@@ -26,6 +27,8 @@ const Dashboard = () => {
   const [macroData, setMacroData] = useState<any[]>([]);
   const [weeklyStats, setWeeklyStats] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [stepHistory, setStepHistory] = useState<StepHistory | null>(null);
+  const [loadingSteps, setLoadingSteps] = useState(false);
 
   useEffect(() => {
     const user = getUser();
@@ -34,6 +37,17 @@ const Dashboard = () => {
     } else {
       setUserProfile(user);
       loadDashboardData(user._id);
+      
+      // Check if Google Fit was just connected
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get('google_fit_connected') === 'true') {
+        toast.success('Google Fit connected successfully!');
+        loadStepData(user._id);
+        // Clean URL
+        window.history.replaceState({}, '', '/dashboard');
+      } else if (user.fitDataEnabled) {
+        loadStepData(user._id);
+      }
     }
   }, [navigate]);
 
@@ -105,6 +119,45 @@ const Dashboard = () => {
       setWeeklyStats({ totalMeals: 0, avgDailyCalories: 0, daysLogged: 0 });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadStepData = async (userId: string) => {
+    setLoadingSteps(true);
+    try {
+      const data = await googleFitService.getStepHistory(userId);
+      setStepHistory(data);
+    } catch (error: any) {
+      console.error('Failed to load step data:', error);
+      if (error.message && !error.message.includes('not connected')) {
+        toast.error('Failed to load step data');
+      }
+    } finally {
+      setLoadingSteps(false);
+    }
+  };
+
+  const handleConnectGoogleFit = () => {
+    googleFitService.connectGoogleFit();
+  };
+
+  const handleDisconnectGoogleFit = async () => {
+    if (!userProfile?._id) return;
+    
+    try {
+      await googleFitService.disconnectGoogleFit(userProfile._id);
+      setStepHistory(null);
+      toast.success('Google Fit disconnected');
+      
+      // Update user profile
+      const user = getUser();
+      if (user) {
+        user.fitDataEnabled = false;
+        user.googleAccessToken = undefined;
+        setUserProfile(user);
+      }
+    } catch (error) {
+      toast.error('Failed to disconnect Google Fit');
     }
   };
 
@@ -226,6 +279,126 @@ const Dashboard = () => {
                 </div>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Google Fit Integration Card */}
+        <Card className="mb-8">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle className="flex items-center gap-2">
+                <Footprints className="h-6 w-6 text-green-600" />
+                Google Fit Integration
+              </CardTitle>
+              {userProfile?.fitDataEnabled ? (
+                <Button variant="outline" onClick={handleDisconnectGoogleFit}>
+                  Disconnect
+                </Button>
+              ) : (
+                <Button onClick={handleConnectGoogleFit} className="bg-green-600 hover:bg-green-700">
+                  Connect Google Fit
+                </Button>
+              )}
+            </div>
+          </CardHeader>
+          <CardContent>
+            {loadingSteps && (
+              <div className="text-center py-8">
+                <p className="text-muted-foreground">Loading step data...</p>
+              </div>
+            )}
+
+            {stepHistory && !loadingSteps && (
+              <div>
+                {/* Step Stats Summary */}
+                <div className="grid gap-4 md:grid-cols-4 mb-6">
+                  <div className="rounded-lg border bg-blue-50 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Footprints className="h-5 w-5 text-blue-600" />
+                      <p className="text-sm text-muted-foreground">Total Steps (7 days)</p>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600">
+                      {stepHistory.totalSteps.toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border bg-green-50 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <TrendingUp className="h-5 w-5 text-green-600" />
+                      <p className="text-sm text-muted-foreground">Daily Average</p>
+                    </div>
+                    <p className="text-2xl font-bold text-green-600">
+                      {stepHistory.averageSteps.toLocaleString()}
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border bg-purple-50 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <ActivityIcon className="h-5 w-5 text-purple-600" />
+                      <p className="text-sm text-muted-foreground">Today's Steps</p>
+                    </div>
+                    <p className="text-2xl font-bold text-purple-600">
+                      {stepHistory.data[stepHistory.data.length - 1]?.steps.toLocaleString() || 0}
+                    </p>
+                  </div>
+
+                  <div className="rounded-lg border bg-orange-50 p-4">
+                    <div className="flex items-center gap-2 mb-2">
+                      <Flame className="h-5 w-5 text-orange-600" />
+                      <p className="text-sm text-muted-foreground">Calories Burned</p>
+                    </div>
+                    <p className="text-2xl font-bold text-orange-600">
+                      {stepHistory.caloriesBurned.toLocaleString()}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Daily Step Breakdown */}
+                <div className="space-y-2">
+                  <h3 className="font-semibold text-foreground mb-3">Daily Step Count</h3>
+                  {stepHistory.data.map((day) => {
+                    const distance = googleFitService.calculateDistance(day.steps);
+                    return (
+                      <div 
+                        key={day.date} 
+                        className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover:bg-muted transition-colors"
+                      >
+                        <div>
+                          <span className="text-sm font-medium text-foreground">
+                            {new Date(day.date).toLocaleDateString('en-US', { 
+                              weekday: 'short', 
+                              month: 'short', 
+                              day: 'numeric' 
+                            })}
+                          </span>
+                          <p className="text-xs text-muted-foreground">
+                            {distance.kilometers} km • {googleFitService.calculateCalories(day.steps)} cal
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-lg font-bold text-green-600">
+                            {day.steps.toLocaleString()}
+                          </span>
+                          <p className="text-xs text-muted-foreground">steps</p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
+            {!userProfile?.fitDataEnabled && !loadingSteps && (
+              <div className="text-center py-8">
+                <Footprints className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground mb-4">
+                  Connect your Google account to automatically track your daily steps and activity levels.
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  Your step data will help us provide more accurate calorie recommendations.
+                </p>
+              </div>
+            )}
           </CardContent>
         </Card>
 

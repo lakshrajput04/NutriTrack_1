@@ -20,7 +20,19 @@ if (!MONGODB_URI) {
 console.log('🔗 MongoDB URI loaded:', MONGODB_URI.replace(/:([^:@]+)@/, ':****@'));
 
 // Middleware
-app.use(cors());
+const corsOptions = {
+  origin: [
+    'http://localhost:8080',
+    'http://localhost:5173',
+    process.env.FRONTEND_URL || 'http://localhost:8080'
+  ],
+  credentials: true,
+  optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization']
+};
+
+app.use(cors(corsOptions));
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({ extended: true }));
 
@@ -409,13 +421,18 @@ app.get('/api/stats', async (req, res) => {
   }
 });
 
-// Start server
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on http://localhost:${PORT}`);
-  console.log(`📊 Health check: http://localhost:${PORT}/health`);
-  console.log(`🌱 Seed data: http://localhost:${PORT}/api/seed`);
-  console.log(`📈 Stats: http://localhost:${PORT}/api/stats`);
-});
+// Start server (only in development, Vercel handles this in production)
+if (process.env.NODE_ENV !== 'production') {
+  app.listen(PORT, () => {
+    console.log(`🚀 Server running on http://localhost:${PORT}`);
+    console.log(`📊 Health check: http://localhost:${PORT}/health`);
+    console.log(`🌱 Seed data: http://localhost:${PORT}/api/seed`);
+    console.log(`📈 Stats: http://localhost:${PORT}/api/stats`);
+  });
+}
+
+// Export for Vercel
+module.exports = app;
 
 // Graceful shutdown
 process.on('SIGINT', async () => {

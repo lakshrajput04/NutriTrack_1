@@ -1,4 +1,4 @@
-# NutriTrack Database Entity-Relationship Diagram (ERD)
+1# NutriTrack Database Entity-Relationship Diagram (ERD)
 
 ## Visual Database Structure
 

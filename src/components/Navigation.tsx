@@ -1,12 +1,26 @@
-import { Link, useLocation } from "react-router-dom";
-import { Activity, Home, FileText, Calculator, LayoutDashboard, Menu, X, Camera, MessageCircle, Calendar, Trophy, User } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
+import { Activity, Home, FileText, Calculator, LayoutDashboard, Menu, X, Sparkles, MessageCircle, Calendar, Trophy, User, Database, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { getUser, logout } from "@/services/auth";
 
 const Navigation = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const [isOpen, setIsOpen] = useState(false);
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    setUser(getUser());
+  }, [location]);
+
+  const handleLogout = () => {
+    logout();
+    setUser(null);
+    setIsOpen(false);
+    navigate("/login");
+  };
 
   const isActive = (path: string) => location.pathname === path;
 
@@ -14,10 +28,11 @@ const Navigation = () => {
     { path: "/", label: "Home", icon: Home },
     { path: "/features", label: "Features", icon: FileText },
     { path: "/tracker", label: "Tracker", icon: Activity },
-    { path: "/meal-analyzer", label: "AI Analyzer", icon: Camera },
+    { path: "/meal-analyzer", label: "AI Analyzer", icon: Sparkles },
     { path: "/ai-coach", label: "AI Coach", icon: MessageCircle },
     { path: "/recipe-planner", label: "Meal Plans", icon: Calendar },
     { path: "/community", label: "Challenges", icon: Trophy },
+    { path: "/database", label: "Database", icon: Database },
     { path: "/bmi", label: "BMI", icon: Calculator },
     { path: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { path: "/profile", label: "Profile", icon: User },
@@ -56,11 +71,23 @@ const Navigation = () => {
             })}
           </div>
 
-          {/* Desktop Sign In Button */}
-          <div className="hidden md:block">
-            <Button asChild>
-              <Link to="/login">Sign In</Link>
-            </Button>
+          {/* Desktop User Actions */}
+          <div className="hidden md:flex items-center gap-3">
+            {user ? (
+              <>
+                <span className="text-sm text-muted-foreground">
+                  Welcome, <span className="font-semibold text-foreground">{user.name}</span>
+                </span>
+                <Button variant="outline" size="sm" onClick={handleLogout}>
+                  <LogOut className="h-4 w-4 mr-2" />
+                  Logout
+                </Button>
+              </>
+            ) : (
+              <Button asChild>
+                <Link to="/login">Sign In</Link>
+              </Button>
+            )}
           </div>
 
           {/* Mobile Navigation */}
@@ -106,13 +133,31 @@ const Navigation = () => {
                     })}
                   </nav>
 
-                  {/* Mobile Sign In Button */}
+                  {/* Mobile User Actions */}
                   <div className="pt-4 border-t">
-                    <Button asChild className="w-full">
-                      <Link to="/login" onClick={handleLinkClick}>
-                        Sign In
-                      </Link>
-                    </Button>
+                    {user ? (
+                      <div className="space-y-3">
+                        <div className="p-3 bg-muted rounded-md">
+                          <p className="text-xs text-muted-foreground">Logged in as</p>
+                          <p className="font-semibold text-foreground">{user.name}</p>
+                          <p className="text-xs text-muted-foreground">{user.email}</p>
+                        </div>
+                        <Button 
+                          variant="outline" 
+                          className="w-full"
+                          onClick={handleLogout}
+                        >
+                          <LogOut className="h-4 w-4 mr-2" />
+                          Logout
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button asChild className="w-full">
+                        <Link to="/login" onClick={handleLinkClick}>
+                          Sign In
+                        </Link>
+                      </Button>
+                    )}
                   </div>
                 </div>
               </SheetContent>

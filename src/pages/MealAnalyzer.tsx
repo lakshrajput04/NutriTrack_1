@@ -2,211 +2,199 @@ import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
-import { Camera, Utensils, Zap, Scale } from 'lucide-react';
-import CameraCapture from '@/components/CameraCapture';
-import FoodAnalysisService, { MealAnalysis, FoodItem } from '@/services/freeFoodAPI';
+import { Textarea } from '@/components/ui/textarea';
+import { Label } from '@/components/ui/label';
+import { Utensils, Zap, Scale, Sparkles, Loader2 } from 'lucide-react';
+import { geminiService } from '@/services/geminiService';
 import { toast } from 'sonner';
 
 const MealAnalyzer = () => {
-  const [showCamera, setShowCamera] = useState(false);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [analysis, setAnalysis] = useState<MealAnalysis | null>(null);
-  const [capturedImage, setCapturedImage] = useState<string | null>(null);
+  const [analysis, setAnalysis] = useState<any | null>(null);
+  const [foodDescription, setFoodDescription] = useState('');
 
-  const foodService = new FoodAnalysisService();
+  const handleAnalyze = async () => {
+    if (!foodDescription.trim()) {
+      toast.error('Please enter a food description');
+      return;
+    }
 
-  const handleImageCapture = async (file: File) => {
     setIsAnalyzing(true);
-    setCapturedImage(URL.createObjectURL(file));
     
     try {
-      const result = await foodService.analyzeImage(file);
+      const result = await geminiService.analyzeFood(foodDescription);
       setAnalysis(result);
-      toast.success('Meal analyzed successfully!');
+      toast.success('Food analyzed successfully!');
     } catch (error) {
-      toast.error('Failed to analyze meal. Please try again.');
+      toast.error('Failed to analyze food. Please try again.');
       console.error(error);
     } finally {
       setIsAnalyzing(false);
-      setShowCamera(false);
     }
   };
 
   const handleStartOver = () => {
     setAnalysis(null);
-    setCapturedImage(null);
-    setShowCamera(true);
+    setFoodDescription('');
   };
 
   const handleSaveMeal = () => {
     if (analysis) {
-      // Save to your existing meal tracking system
       toast.success('Meal saved to your tracker!');
       setAnalysis(null);
-      setCapturedImage(null);
+      setFoodDescription('');
     }
   };
-
-  if (showCamera) {
-    return (
-      <div className="min-h-screen py-12 flex items-center justify-center">
-        <CameraCapture
-          onImageCapture={handleImageCapture}
-          onCancel={() => setShowCamera(false)}
-          isAnalyzing={isAnalyzing}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4 max-w-4xl">
         <div className="text-center mb-8">
-          <h1 className="text-4xl font-bold mb-4">AI Meal Analyzer</h1>
+          <h1 className="text-4xl font-bold mb-4 flex items-center justify-center gap-3">
+            <Sparkles className="h-10 w-10 text-primary" />
+            AI Meal Analyzer
+          </h1>
           <p className="text-lg text-muted-foreground">
-            Snap a photo of your meal and get instant nutrition analysis
+            Describe your meal and get instant AI-powered nutrition analysis
           </p>
         </div>
 
         {!analysis ? (
-          <Card className="text-center">
-            <CardContent className="p-12">
-              <Camera className="h-24 w-24 mx-auto mb-6 text-primary opacity-50" />
-              <h2 className="text-2xl font-semibold mb-4">Ready to Analyze Your Meal?</h2>
-              <p className="text-muted-foreground mb-6">
-                Take a photo or upload an image of your meal for instant nutrition analysis
-              </p>
-              <Button size="lg" onClick={() => setShowCamera(true)}>
-                <Camera className="mr-2 h-5 w-5" />
-                Start Analysis
+          <Card>
+            <CardHeader>
+              <CardTitle>Describe Your Meal</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="food-description">What did you eat?</Label>
+                <Textarea
+                  id="food-description"
+                  placeholder="e.g., Grilled chicken breast with brown rice and steamed broccoli"
+                  value={foodDescription}
+                  onChange={(e) => setFoodDescription(e.target.value)}
+                  rows={4}
+                  className="resize-none"
+                />
+                <p className="text-sm text-muted-foreground">
+                  Be as detailed as possible for more accurate analysis
+                </p>
+              </div>
+
+              <Button 
+                size="lg" 
+                onClick={handleAnalyze} 
+                disabled={isAnalyzing || !foodDescription.trim()}
+                className="w-full"
+              >
+                {isAnalyzing ? (
+                  <>
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                    Analyzing...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="mr-2 h-5 w-5" />
+                    Analyze with AI
+                  </>
+                )}
               </Button>
+
+              <div className="mt-6 p-4 bg-muted rounded-lg">
+                <h3 className="font-semibold mb-2 flex items-center gap-2">
+                  <Utensils className="h-4 w-4" />
+                  Example Descriptions
+                </h3>
+                <ul className="text-sm text-muted-foreground space-y-1 list-disc list-inside">
+                  <li>2 scrambled eggs with whole wheat toast and avocado</li>
+                  <li>Paneer tikka masala with naan and dal</li>
+                  <li>Grilled salmon 200g with quinoa and mixed vegetables</li>
+                </ul>
+              </div>
             </CardContent>
           </Card>
         ) : (
-          <div className="grid gap-6 lg:grid-cols-2">
-            {/* Image Display */}
+          <div className="space-y-6">
             <Card>
               <CardHeader>
-                <CardTitle>Your Meal</CardTitle>
+                <CardTitle>Nutrition Analysis</CardTitle>
               </CardHeader>
               <CardContent>
-                {capturedImage && (
-                  <img
-                    src={capturedImage}
-                    alt="Analyzed meal"
-                    className="w-full rounded-lg object-cover aspect-video"
-                  />
-                )}
-                <div className="mt-4 flex gap-2">
-                  <Button variant="outline" onClick={handleStartOver}>
-                    <Camera className="mr-2 h-4 w-4" />
-                    Analyze Another
-                  </Button>
-                  <Button onClick={handleSaveMeal}>
-                    <Utensils className="mr-2 h-4 w-4" />
-                    Save to Tracker
-                  </Button>
+                <div className="space-y-4">
+                  <div className="p-4 bg-primary/5 rounded-lg">
+                    <h3 className="font-semibold mb-2">Your Meal:</h3>
+                    <p className="text-muted-foreground">{foodDescription}</p>
+                  </div>
+
+                  <div className="flex items-center justify-between p-4 bg-muted rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="p-3 bg-primary/10 rounded-full">
+                        <Zap className="h-6 w-6 text-primary" />
+                      </div>
+                      <div>
+                        <p className="text-sm text-muted-foreground">Total Calories</p>
+                        <p className="text-3xl font-bold">{analysis.totalCalories}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  {analysis.analysis && (
+                    <div className="p-4 bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg">
+                      <h3 className="font-semibold mb-2">AI Insights</h3>
+                      <p className="text-sm text-muted-foreground">{analysis.analysis}</p>
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
-            {/* Analysis Results */}
-            <div className="space-y-6">
-              {/* Nutrition Summary */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5 text-warning" />
-                    Nutrition Summary
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="text-center p-4 bg-primary/10 rounded-lg">
-                      <p className="text-3xl font-bold text-primary">{analysis.totalCalories}</p>
-                      <p className="text-sm text-muted-foreground">Calories</p>
-                    </div>
-                    <div className="text-center p-4 bg-secondary/10 rounded-lg">
-                      <p className="text-3xl font-bold text-secondary">{analysis.totalProtein.toFixed(1)}g</p>
-                      <p className="text-sm text-muted-foreground">Protein</p>
-                    </div>
-                    <div className="text-center p-4 bg-accent/10 rounded-lg">
-                      <p className="text-3xl font-bold text-accent">{analysis.totalCarbs.toFixed(1)}g</p>
-                      <p className="text-sm text-muted-foreground">Carbs</p>
-                    </div>
-                    <div className="text-center p-4 bg-warning/10 rounded-lg">
-                      <p className="text-3xl font-bold text-warning">{analysis.totalFat.toFixed(1)}g</p>
-                      <p className="text-sm text-muted-foreground">Fat</p>
-                    </div>
-                  </div>
-                  
-                  <div className="mt-4">
-                    <div className="flex justify-between items-center mb-2">
-                      <span className="text-sm font-medium">Meal Type</span>
-                      <Badge variant="secondary" className="capitalize">
-                        {analysis.mealType}
-                      </Badge>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            <Card>
+              <CardHeader>
+                <CardTitle>Nutritional Breakdown</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {analysis.foods.map((food: any, index: number) => (
+                    <div key={index} className="border rounded-lg p-4">
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="flex-1">
+                          <h3 className="font-semibold text-lg">{food.name}</h3>
+                          <p className="text-sm text-muted-foreground">{food.quantity}</p>
+                        </div>
+                        <Badge variant="secondary" className="text-lg">{food.calories} cal</Badge>
+                      </div>
 
-              {/* Detected Foods */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Scale className="h-5 w-5 text-primary" />
-                    Detected Foods
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {analysis.foods.map((food: FoodItem) => (
-                      <div key={food.id} className="flex justify-between items-center p-3 bg-muted rounded-lg">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                         <div>
-                          <p className="font-medium">{food.name}</p>
-                          <p className="text-sm text-muted-foreground">
-                            Confidence: {(food.confidence * 100).toFixed(0)}%
-                          </p>
+                          <p className="text-xs text-muted-foreground mb-1">Protein</p>
+                          <p className="text-lg font-semibold text-primary">{food.protein}g</p>
                         </div>
-                        <div className="text-right">
-                          <p className="font-semibold">{food.calories} cal</p>
-                          <p className="text-xs text-muted-foreground">
-                            P: {food.protein.toFixed(1)}g | C: {food.carbs.toFixed(1)}g | F: {food.fat.toFixed(1)}g
-                          </p>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Carbs</p>
+                          <p className="text-lg font-semibold text-secondary">{food.carbs}g</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Fat</p>
+                          <p className="text-lg font-semibold text-orange-600">{food.fat}g</p>
+                        </div>
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-1">Fiber</p>
+                          <p className="text-lg font-semibold text-green-600">{food.fiber}g</p>
                         </div>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
 
-              {/* Daily Progress */}
-              <Card>
-                <CardHeader>
-                  <CardTitle>Daily Progress</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span>Calories</span>
-                        <span>{analysis.totalCalories} / 2000</span>
-                      </div>
-                      <Progress value={(analysis.totalCalories / 2000) * 100} />
-                    </div>
-                    <div>
-                      <div className="flex justify-between text-sm mb-1">
-                        <span>Protein</span>
-                        <span>{analysis.totalProtein.toFixed(1)}g / 150g</span>
-                      </div>
-                      <Progress value={(analysis.totalProtein / 150) * 100} />
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
+            <div className="flex gap-4">
+              <Button variant="outline" onClick={handleStartOver} className="flex-1">
+                Analyze Another Meal
+              </Button>
+              <Button onClick={handleSaveMeal} className="flex-1">
+                <Scale className="mr-2 h-4 w-4" />
+                Save to Tracker
+              </Button>
             </div>
           </div>
         )}

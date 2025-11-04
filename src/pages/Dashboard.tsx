@@ -1,5 +1,9 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { User, Target, TrendingUp, Calendar } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { User, Target, TrendingUp, Calendar, LogOut, Activity as ActivityIcon, Weight, Ruler } from "lucide-react";
+import { getUser, logout } from "@/services/auth";
 import {
   LineChart,
   Line,
@@ -14,6 +18,23 @@ import {
 } from "recharts";
 
 const Dashboard = () => {
+  const navigate = useNavigate();
+  const [userProfile, setUserProfile] = useState<any>(null);
+
+  useEffect(() => {
+    const user = getUser();
+    if (!user) {
+      navigate("/login");
+    } else {
+      setUserProfile(user);
+    }
+  }, [navigate]);
+
+  const handleLogout = () => {
+    logout();
+    navigate("/login");
+  };
+
   const weeklyData = [
     { day: "Mon", calories: 1850 },
     { day: "Tue", calories: 2100 },
@@ -30,24 +51,39 @@ const Dashboard = () => {
     { name: "Fats", value: 70, fill: "hsl(38 92% 50%)" },
   ];
 
-  const userProfile = {
-    name: "John Doe",
-    age: 28,
-    gender: "Male",
-    goal: "Maintain Weight",
-    targetCalories: 2000,
-    currentStreak: 7,
+  if (!userProfile) {
+    return null;
+  }
+
+  const getActivityLevelLabel = (level: string) => {
+    const labels: Record<string, string> = {
+      sedentary: "Sedentary",
+      lightly_active: "Lightly Active",
+      moderately_active: "Moderately Active",
+      very_active: "Very Active",
+      extra_active: "Extra Active"
+    };
+    return labels[level] || level;
   };
 
   return (
     <div className="min-h-screen py-12">
       <div className="container mx-auto px-4">
-        <h1 className="mb-8 text-4xl font-bold text-foreground">Dashboard</h1>
+        <div className="mb-8 flex items-center justify-between">
+          <h1 className="text-4xl font-bold text-foreground">Dashboard</h1>
+          <Button variant="outline" onClick={handleLogout}>
+            <LogOut className="mr-2 h-4 w-4" />
+            Logout
+          </Button>
+        </div>
 
-        {/* Profile Section */}
-        <div className="mb-8 grid gap-6 md:grid-cols-4">
-          <Card>
-            <CardContent className="p-6">
+        {/* User Profile Card */}
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle>Your Profile</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4">
               <div className="flex items-center gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
                   <User className="h-6 w-6 text-primary" />
@@ -57,55 +93,79 @@ const Dashboard = () => {
                   <p className="font-semibold text-foreground">{userProfile.name}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardContent className="p-6">
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-secondary/10">
-                  <Target className="h-6 w-6 text-secondary" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-500/10">
+                  <Target className="h-6 w-6 text-blue-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Goal</p>
-                  <p className="font-semibold text-foreground">{userProfile.goal}</p>
+                  <p className="text-sm text-muted-foreground">Email</p>
+                  <p className="font-semibold text-foreground text-sm">{userProfile.email}</p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
 
-          <Card>
-            <CardContent className="p-6">
+              {userProfile.age && (
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-purple-500/10">
+                    <Calendar className="h-6 w-6 text-purple-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Age</p>
+                    <p className="font-semibold text-foreground">{userProfile.age} years</p>
+                  </div>
+                </div>
+              )}
+
+              {userProfile.weight && (
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-green-500/10">
+                    <Weight className="h-6 w-6 text-green-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Weight</p>
+                    <p className="font-semibold text-foreground">{userProfile.weight} kg</p>
+                  </div>
+                </div>
+              )}
+
+              {userProfile.height && (
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-orange-500/10">
+                    <Ruler className="h-6 w-6 text-orange-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Height</p>
+                    <p className="font-semibold text-foreground">{userProfile.height} cm</p>
+                  </div>
+                </div>
+              )}
+
+              {userProfile.activityLevel && (
+                <div className="flex items-center gap-4">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-cyan-500/10">
+                    <ActivityIcon className="h-6 w-6 text-cyan-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm text-muted-foreground">Activity</p>
+                    <p className="font-semibold text-foreground text-sm">{getActivityLevelLabel(userProfile.activityLevel)}</p>
+                  </div>
+                </div>
+              )}
+
               <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-accent/10">
-                  <TrendingUp className="h-6 w-6 text-accent" />
+                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/10">
+                  <TrendingUp className="h-6 w-6 text-amber-600" />
                 </div>
                 <div>
-                  <p className="text-sm text-muted-foreground">Target</p>
+                  <p className="text-sm text-muted-foreground">Daily Goal</p>
                   <p className="font-semibold text-foreground">
-                    {userProfile.targetCalories} cal/day
+                    {userProfile.dailyCalorieGoal || 2000} cal
                   </p>
                 </div>
               </div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center gap-4">
-                <div className="flex h-12 w-12 items-center justify-center rounded-full bg-success/10">
-                  <Calendar className="h-6 w-6 text-success" />
-                </div>
-                <div>
-                  <p className="text-sm text-muted-foreground">Streak</p>
-                  <p className="font-semibold text-foreground">
-                    {userProfile.currentStreak} days
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Charts Section */}
         <div className="grid gap-8 lg:grid-cols-2">

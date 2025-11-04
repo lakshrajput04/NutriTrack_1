@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -11,14 +11,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Progress } from "@/components/ui/progress";
-import { Plus, Coffee, UtensilsCrossed, Moon, Apple } from "lucide-react";
+import { Plus, Coffee, UtensilsCrossed, Moon, Apple, Search, ChefHat } from "lucide-react";
 import { toast } from "sonner";
+import { loadRecipes, searchRecipes, Recipe } from "@/services/recipeService";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface Meal {
   id: number;
   type: string;
   food: string;
   calories: number;
+  protein: number;
+  carbs: number;
+  fats: number;
 }
 
 const Tracker = () => {
@@ -26,10 +31,44 @@ const Tracker = () => {
   const [mealType, setMealType] = useState("");
   const [foodName, setFoodName] = useState("");
   const [calories, setCalories] = useState("");
+  
+  // Recipe browser state
+  const [recipes, setRecipes] = useState<Recipe[]>([]);
+  const [filteredRecipes, setFilteredRecipes] = useState<Recipe[]>([]);
+  const [recipeSearch, setRecipeSearch] = useState("");
+  const [loadingRecipes, setLoadingRecipes] = useState(true);
 
   const calorieGoal = 2000;
   const totalCalories = meals.reduce((sum, meal) => sum + meal.calories, 0);
+  const totalProtein = meals.reduce((sum, meal) => sum + meal.protein, 0);
+  const totalCarbs = meals.reduce((sum, meal) => sum + meal.carbs, 0);
+  const totalFats = meals.reduce((sum, meal) => sum + meal.fats, 0);
   const progressPercentage = Math.min((totalCalories / calorieGoal) * 100, 100);
+
+  // Load recipes on mount
+  useEffect(() => {
+    const fetchRecipes = async () => {
+      try {
+        setLoadingRecipes(true);
+        const data = await loadRecipes();
+        setRecipes(data);
+        setFilteredRecipes(data);
+      } catch (error) {
+        console.error('Failed to load recipes:', error);
+        toast.error('Failed to load recipes');
+      } finally {
+        setLoadingRecipes(false);
+      }
+    };
+    
+    fetchRecipes();
+  }, []);
+
+  // Filter recipes based on search
+  useEffect(() => {
+    const results = searchRecipes(recipes, recipeSearch);
+    setFilteredRecipes(results);
+  }, [recipeSearch, recipes]);
 
   const suggestedFoods = [
     { name: "Grilled Chicken Salad", calories: 350, icon: Apple },
@@ -49,6 +88,9 @@ const Tracker = () => {
       type: mealType,
       food: foodName,
       calories: parseInt(calories),
+      protein: 0,
+      carbs: 0,
+      fats: 0,
     };
 
     setMeals([...meals, newMeal]);
@@ -56,6 +98,26 @@ const Tracker = () => {
     setFoodName("");
     setCalories("");
     toast.success("Meal logged successfully!");
+  };
+
+  const handleAddRecipe = (recipe: Recipe) => {
+    if (!mealType) {
+      toast.error("Please select a meal type first");
+      return;
+    }
+
+    const newMeal: Meal = {
+      id: Date.now(),
+      type: mealType,
+      food: recipe.name,
+      calories: Math.round(recipe.calories),
+      protein: Math.round(recipe.protein),
+      carbs: Math.round(recipe.carbs),
+      fats: Math.round(recipe.fats),
+    };
+
+    setMeals([...meals, newMeal]);
+    toast.success(`Added ${recipe.name} to ${mealType}!`);
   };
 
   const getMealIcon = (type: string) => {
@@ -99,31 +161,102 @@ const Tracker = () => {
                   </Select>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="food-name">Food Name</Label>
-                  <Input
-                    id="food-name"
-                    placeholder="e.g., Grilled Chicken Salad"
-                    value={foodName}
-                    onChange={(e) => setFoodName(e.target.value)}
-                  />
-                </div>
+                <Tabs defaultValue="manual" className="w-full">
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="manual">Manual Entry</TabsTrigger>
+                    <TabsTrigger value="recipes">Browse Recipes</TabsTrigger>
+                  </TabsList>
+                  
+                  <TabsContent value="manual" className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="food-name">Food Name</Label>
+                      <Input
+                        id="food-name"
+                        placeholder="e.g., Grilled Chicken Salad"
+                        value={foodName}
+                        onChange={(e) => setFoodName(e.target.value)}
+                      />
+                    </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="calories">Calories</Label>
-                  <Input
-                    id="calories"
-                    type="number"
-                    placeholder="e.g., 350"
-                    value={calories}
-                    onChange={(e) => setCalories(e.target.value)}
-                  />
-                </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="calories">Calories</Label>
+                      <Input
+                        id="calories"
+                        type="number"
+                        placeholder="e.g., 350"
+                        value={calories}
+                        onChange={(e) => setCalories(e.target.value)}
+                      />
+                    </div>
 
-                <Button onClick={handleAddMeal} className="w-full">
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add Meal
-                </Button>
+                    <Button onClick={handleAddMeal} className="w-full">
+                      <Plus className="mr-2 h-4 w-4" />
+                      Add Meal
+                    </Button>
+                  </TabsContent>
+
+                  <TabsContent value="recipes" className="space-y-4 mt-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="recipe-search">Search Indian Recipes</Label>
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                        <Input
+                          id="recipe-search"
+                          placeholder="Search for dishes..."
+                          value={recipeSearch}
+                          onChange={(e) => setRecipeSearch(e.target.value)}
+                          className="pl-10"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="max-h-[400px] overflow-y-auto space-y-2 border rounded-lg p-2">
+                      {loadingRecipes ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          Loading recipes...
+                        </div>
+                      ) : filteredRecipes.length === 0 ? (
+                        <div className="text-center py-8 text-muted-foreground">
+                          No recipes found. Try a different search.
+                        </div>
+                      ) : (
+                        filteredRecipes.slice(0, 50).map((recipe, index) => (
+                          <div
+                            key={index}
+                            className="flex items-center justify-between rounded-lg border p-3 hover:bg-muted/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3 flex-1 min-w-0">
+                              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary/10 text-primary flex-shrink-0">
+                                <ChefHat className="h-5 w-5" />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium text-sm text-foreground truncate">
+                                  {recipe.name}
+                                </p>
+                                <p className="text-xs text-muted-foreground">
+                                  {Math.round(recipe.calories)} cal | P: {Math.round(recipe.protein)}g | C: {Math.round(recipe.carbs)}g | F: {Math.round(recipe.fats)}g
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              size="sm"
+                              onClick={() => handleAddRecipe(recipe)}
+                              disabled={!mealType}
+                              className="ml-2 flex-shrink-0"
+                            >
+                              <Plus className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                    {filteredRecipes.length > 50 && (
+                      <p className="text-xs text-muted-foreground text-center">
+                        Showing first 50 results. Refine your search to see more.
+                      </p>
+                    )}
+                  </TabsContent>
+                </Tabs>
               </CardContent>
             </Card>
 
@@ -186,15 +319,15 @@ const Tracker = () => {
 
                 <div className="grid grid-cols-3 gap-4">
                   <div className="rounded-lg border p-3 text-center">
-                    <p className="text-2xl font-bold text-primary">32g</p>
+                    <p className="text-2xl font-bold text-primary">{Math.round(totalProtein)}g</p>
                     <p className="text-xs text-muted-foreground">Protein</p>
                   </div>
                   <div className="rounded-lg border p-3 text-center">
-                    <p className="text-2xl font-bold text-secondary">45g</p>
+                    <p className="text-2xl font-bold text-secondary">{Math.round(totalCarbs)}g</p>
                     <p className="text-xs text-muted-foreground">Carbs</p>
                   </div>
                   <div className="rounded-lg border p-3 text-center">
-                    <p className="text-2xl font-bold text-warning">18g</p>
+                    <p className="text-2xl font-bold text-warning">{Math.round(totalFats)}g</p>
                     <p className="text-xs text-muted-foreground">Fat</p>
                   </div>
                 </div>

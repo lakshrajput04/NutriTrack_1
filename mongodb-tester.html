@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MongoDB Data Sender - NutriTrack</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #2563eb;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .button {
+            background: #2563eb;
+            color: white;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            margin: 10px;
+            font-size: 16px;
+        }
+        .button:hover {
+            background: #1d4ed8;
+        }
+        .success {
+            background: #10b981;
+        }
+        .success:hover {
+            background: #059669;
+        }
+        .danger {
+            background: #ef4444;
+        }
+        .danger:hover {
+            background: #dc2626;
+        }
+        .result {
+            background: #f3f4f6;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 10px 0;
+            white-space: pre-wrap;
+            font-family: monospace;
+            border-left: 4px solid #2563eb;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 6px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .status.connected {
+            background: #d1fae5;
+            color: #065f46;
+        }
+        .status.disconnected {
+            background: #fee2e2;
+            color: #991b1b;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🍃 MongoDB Data Operations - NutriTrack</h1>
+        
+        <div id="serverStatus" class="status disconnected">
+            🔍 Checking server status...
+        </div>
+
+        <div class="grid">
+            <button class="button success" onclick="seedData()">🌱 Seed Sample Data</button>
+            <button class="button" onclick="addUser()">👤 Add New User</button>
+            <button class="button" onclick="addMealLog()">🍽️ Add Meal Log</button>
+            <button class="button" onclick="addChatMessage()">💬 Add Chat Message</button>
+        </div>
+
+        <div class="grid">
+            <button class="button" onclick="getStats()">📊 Get Database Stats</button>
+            <button class="button" onclick="getUsers()">👥 Get All Users</button>
+            <button class="button" onclick="getMeals()">🍽️ Get Meal Logs</button>
+            <button class="button danger" onclick="clearResults()">🗑️ Clear Results</button>
+        </div>
+
+        <div id="results"></div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3001';
+        let currentUserId = null;
+
+        // Check server status
+        async function checkServerStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/health`);
+                const data = await response.json();
+                document.getElementById('serverStatus').className = 'status connected';
+                document.getElementById('serverStatus').innerHTML = `✅ Server Connected - MongoDB: ${data.mongodb}`;
+            } catch (error) {
+                document.getElementById('serverStatus').className = 'status disconnected';
+                document.getElementById('serverStatus').innerHTML = '❌ Server Disconnected - Please start backend server';
+            }
+        }
+
+        async function apiCall(endpoint, method = 'GET', data = null) {
+            try {
+                const config = {
+                    method,
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                };
+                
+                if (data) {
+                    config.body = JSON.stringify(data);
+                }
+
+                const response = await fetch(`${API_BASE}${endpoint}`, config);
+                const result = await response.json();
+                
+                displayResult(`${method} ${endpoint}`, result);
+                return result;
+            } catch (error) {
+                displayResult(`Error: ${endpoint}`, { error: error.message });
+            }
+        }
+
+        async function seedData() {
+            const result = await apiCall('/api/seed', 'POST');
+            if (result && !result.error) {
+                showSuccess('Sample data seeded successfully!');
+            }
+        }
+
+        async function addUser() {
+            const userData = {
+                name: `Test User ${Date.now()}`,
+                email: `user${Date.now()}@nutritrack.com`,
+                age: Math.floor(Math.random() * 30) + 20,
+                weight: Math.floor(Math.random() * 50) + 50,
+                height: Math.floor(Math.random() * 40) + 150,
+                activityLevel: ['sedentary', 'lightly_active', 'moderately_active', 'very_active'][Math.floor(Math.random() * 4)],
+                goals: ['weight_loss', 'muscle_gain', 'maintenance'],
+                dailyCalorieGoal: Math.floor(Math.random() * 800) + 1600
+            };
+
+            const result = await apiCall('/api/users', 'POST', userData);
+            if (result && result._id) {
+                currentUserId = result._id;
+                showSuccess(`User created with ID: ${result._id}`);
+            }
+        }
+
+        async function addMealLog() {
+            if (!currentUserId) {
+                // Get a user first
+                const users = await fetch(`${API_BASE}/api/users`).then(r => r.json());
+                if (users.length > 0) {
+                    currentUserId = users[0]._id;
+                } else {
+                    showError('Please create a user first!');
+                    return;
+                }
+            }
+
+            const mealData = {
+                userId: currentUserId,
+                foods: [
+                    {
+                        name: 'Grilled Salmon',
+                        calories: 350,
+                        protein: 30,
+                        carbs: 0,
+                        fat: 20,
+                        fiber: 0,
+                        sugar: 0,
+                        quantity: '200g'
+                    },
+                    {
+                        name: 'Quinoa',
+                        calories: 220,
+                        protein: 8,
+                        carbs: 40,
+                        fat: 4,
+                        fiber: 5,
+                        sugar: 2,
+                        quantity: '100g'
+                    }
+                ],
+                totalCalories: 570,
+                mealType: ['breakfast', 'lunch', 'dinner', 'snack'][Math.floor(Math.random() * 4)],
+                analysis: 'Healthy balanced meal with good protein and fiber content'
+            };
+
+            await apiCall('/api/meals', 'POST', mealData);
+        }
+
+        async function addChatMessage() {
+            if (!currentUserId) {
+                // Get a user first
+                const users = await fetch(`${API_BASE}/api/users`).then(r => r.json());
+                if (users.length > 0) {
+                    currentUserId = users[0]._id;
+                } else {
+                    showError('Please create a user first!');
+                    return;
+                }
+            }
+
+            const messages = [
+                'How can I lose weight effectively?',
+                'What should I eat for breakfast?',
+                'Can you suggest a workout routine?',
+                'How many calories should I eat per day?',
+                'What are the benefits of protein?'
+            ];
+
+            const chatData = {
+                userId: currentUserId,
+                role: 'user',
+                content: messages[Math.floor(Math.random() * messages.length)],
+                type: 'text'
+            };
+
+            await apiCall('/api/chat', 'POST', chatData);
+        }
+
+        async function getStats() {
+            await apiCall('/api/stats');
+        }
+
+        async function getUsers() {
+            await apiCall('/api/users');
+        }
+
+        async function getMeals() {
+            if (currentUserId) {
+                await apiCall(`/api/meals/${currentUserId}`);
+            } else {
+                await apiCall('/api/meals/all');
+            }
+        }
+
+        function displayResult(title, data) {
+            const results = document.getElementById('results');
+            const resultDiv = document.createElement('div');
+            resultDiv.className = 'result';
+            resultDiv.innerHTML = `<strong>${title}</strong>\n${JSON.stringify(data, null, 2)}`;
+            results.appendChild(resultDiv);
+            results.scrollTop = results.scrollHeight;
+        }
+
+        function showSuccess(message) {
+            displayResult('✅ Success', { message });
+        }
+
+        function showError(message) {
+            displayResult('❌ Error', { error: message });
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        // Check server status on load
+        checkServerStatus();
+        setInterval(checkServerStatus, 10000); // Check every 10 seconds
+    </script>
+</body>
+</html>

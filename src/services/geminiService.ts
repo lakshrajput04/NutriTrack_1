@@ -12,7 +12,8 @@ export class GeminiService {
 
   constructor() {
     this.genAI = new GoogleGenerativeAI(API_KEY || '');
-    this.model = this.genAI.getGenerativeModel({ model: 'gemini-pro' });
+    // Use gemini-2.0-flash for fast text generation
+    this.model = this.genAI.getGenerativeModel({ model: 'gemini-2.0-flash' });
   }
 
   async analyzeFood(foodDescription: string, imageBase64?: string): Promise<{
